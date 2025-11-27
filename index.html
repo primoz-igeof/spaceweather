@@ -1,562 +1,227 @@
-// Load K-index data
-        async function loadKindexData() {
-            try {
-                const response = await fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json');
-                const jsonData = await response.json();
-
-                const times = [];
-                const kpValues = [];
-                const colors = [];
-
-                jsonData.slice(1).forEach(d => {
-                    const time = new Date(d[0]);
-                    const kp = parseFloat(d[1]);
-                    
-                    times.push(time);
-                    kpValues.push(kp);
-                    
-                    // Color based on severity
-                    if (kp >= 5) colors.push('#dc2626'); // Red for storm
-                    else if (kp >= 4) colors.push('#f59e0b'); // Orange for unsettled
-                    else colors.push('#16a34a'); // Green for quiet
-                });
-
-                const trace = {
-                    x: times,
-                    y: kpValues,
-                    type: 'bar',
-                    marker: { color: colors },
-                    name: 'Kp Index'
-                };
-
-                const layout = {
-                    xaxis: { title: 'Time (UTC)' },
-                    yaxis: { 
-                        title: 'Kp Index', 
-                        range: [0, 9],
-                        dtick: 1
-                    },
-                    shapes: [
-                        { type: 'line', x0: times[0], x1: times[times.length-1], y0: 5, y1: 5, 
-                          line: { color: '#dc2626', width: 2, dash: 'dash' } }
-                    ],
-                    annotations: [
-                        { x: 0.95, y: 5, xref: 'paper', yref: 'y', text: 'Storm Threshold (G1)', 
-                          showarrow: false, font: { size: 11, color: '#dc2626' } }
-                    ],
-                    margin: { l: 60, r: 40, t: 30, b: 50 }
-                };
-
-                Plotly.newPlot('kindexChart', [trace], layout, { responsive: true, displaylogo: false });
-                updateTimestamp();
-            } catch (error) {
-                console.error('Error loading K-index data:', error);
-            }
-        }
-
-        // Load Solar Cycle data
-        async function loadSolarCycleData() {
-            try {
-                const response = await fetch('https://services.swpc.noaa.gov/json/solar-cycle/observed-solar-cycle-indices.json');
-                const jsonData = await response.json();
-
-                const times = [];
-                const ssnValues = [];
-                const smoothedValues = [];
-
-                jsonData.forEach(d => {
-                    const time = new Date(d['time-tag'] + '-01');
-                    times.push(time);
-                    ssnValues.push(d.ssn);
-                    smoothedValues.push(d.smoothed_ssn);
-                });
-
-                const trace1 = {
-                    x: times,
-                    y: ssnValues,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Monthly Sunspot Number',
-                    line: { color: '#94a3b8', width: 1 },
-                    opacity: 0.5
-                };
-
-                const trace2 = {
-                    x: times,
-                    y: smoothedValues,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Smoothed Sunspot Number',
-                    line: { color: '#3b82f6', width: 3 }
-                };
-
-                const layout = {
-                    xaxis: { title: 'Date' },
-                    yaxis: { title: 'Sunspot Number' },
-                    hovermode: 'closest',
-                    margin: { l: 60, r: 40, t: 30, b: 50 },
-                    legend: { x: 0.02, y: 0.98 }
-                };
-
-                Plotly.newPlot('solarCycleChart', [trace1, trace2], layout, { responsive: true, displaylogo: false });
-                updateTimestamp();
-            } catch (error) {
-                console.error('Error loading Solar Cycle data:', error);
-            }
-        }<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Space Weather Dashboard</title>
-    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 20px;
             min-height: 100vh;
         }
-        
-        .container {
-            max-width: 1600px;
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            max-width: 1800px;
             margin: 0 auto;
         }
-        
-        header {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        
-        h1 {
-            font-size: 36px;
-            color: #1e293b;
-            margin-bottom: 10px;
-        }
-        
-        .subtitle {
-            font-size: 16px;
-            color: #64748b;
-        }
-        
-        .update-info {
-            margin-top: 15px;
-            padding: 10px;
-            background: #f1f5f9;
-            border-radius: 6px;
-            font-size: 14px;
-            color: #475569;
-        }
-        
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
+
         .card {
             background: white;
             border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
+            padding: 20px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-        
+
         .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.3);
         }
-        
+
         .card h2 {
-            font-size: 20px;
-            color: #1e293b;
+            color: #667eea;
             margin-bottom: 15px;
+            font-size: 1.4em;
+            border-bottom: 3px solid #667eea;
             padding-bottom: 10px;
-            border-bottom: 2px solid #e2e8f0;
         }
-        
-        .card-full {
-            grid-column: 1 / -1;
-        }
-        
-        .image-container {
+
+        .card img {
             width: 100%;
-            text-align: center;
-            margin-top: 15px;
-        }
-        
-        .image-container img {
-            max-width: 100%;
             height: auto;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: block;
         }
-        
-        .chart-container {
-            width: 100%;
-            height: 500px;
-            margin-top: 15px;
-        }
-        
-        .info-text {
-            font-size: 14px;
-            color: #64748b;
+
+        .card p {
+            color: #666;
+            margin-top: 10px;
             line-height: 1.6;
-            margin-top: 10px;
+            font-size: 0.95em;
         }
-        
-        .refresh-btn {
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-top: 10px;
-            transition: background 0.2s;
-        }
-        
-        .refresh-btn:hover {
-            background: #2563eb;
-        }
-        
-        .refresh-btn:disabled {
-            background: #94a3b8;
-            cursor: not-allowed;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .spinning {
-            animation: spin 1s linear infinite;
-            display: inline-block;
-        }
-        
-        .aurora-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-top: 15px;
-        }
-        
-        @media (max-width: 768px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-            .aurora-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-        
-        .legend {
-            background: #f8fafc;
-            padding: 15px;
-            border-radius: 6px;
-            margin-top: 15px;
-            font-size: 13px;
-            color: #475569;
-        }
-        
-        .legend h4 {
-            margin-bottom: 8px;
-            color: #1e293b;
-        }
-        
-        footer {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 20px;
-            text-align: center;
-            font-size: 14px;
-            color: #64748b;
-        }
-        
-        footer a {
-            color: #3b82f6;
+
+        .card a {
+            color: #667eea;
             text-decoration: none;
+            font-weight: 600;
         }
-        
-        footer a:hover {
+
+        .card a:hover {
             text-decoration: underline;
+        }
+
+        .refresh-info {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .last-updated {
+            background: rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 6px;
+            display: inline-block;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 1200px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🌌 Space Weather Dashboard</h1>
-            <p class="subtitle">Real-time monitoring of solar activity, geomagnetic conditions, and auroral forecasts</p>
-            <div class="update-info" id="lastUpdate">Loading data...</div>
-        </header>
+    <div class="header">
+        <h1>🌟 Space Weather Dashboard 🌟</h1>
+        <p>Real-time monitoring of solar activity, geomagnetic conditions, and aurora forecasts</p>
+    </div>
 
-        <div class="grid">
-            <!-- GOES X-ray Flux -->
-            <div class="card card-full">
-                <h2>⚡ GOES X-ray Flux (6 Hour)</h2>
-                <div class="chart-container" id="xrayChart"></div>
-                <div class="legend">
-                    <h4>Solar Flare Classes:</h4>
-                    <strong>X:</strong> ≥ 10⁻⁴ W/m² (Extreme) • 
-                    <strong>M:</strong> 10⁻⁵ W/m² (Strong) • 
-                    <strong>C:</strong> 10⁻⁶ W/m² (Moderate) • 
-                    <strong>B:</strong> 10⁻⁷ W/m² (Small) • 
-                    <strong>A:</strong> &lt; 10⁻⁷ W/m² (Background)
-                </div>
-                <button class="refresh-btn" onclick="loadXrayData()">↻ Refresh X-ray Data</button>
-            </div>
-
-            <!-- Aurora Forecast -->
-            <div class="card">
-                <h2>🌠 Aurora 30-Minute Forecast</h2>
-                <div class="aurora-grid">
-                    <div class="image-container">
-                        <h3 style="font-size: 16px; margin-bottom: 10px;">Northern Hemisphere</h3>
-                        <img id="auroraNorth" src="https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg" alt="Aurora North">
-                    </div>
-                    <div class="image-container">
-                        <h3 style="font-size: 16px; margin-bottom: 10px;">Southern Hemisphere</h3>
-                        <img id="auroraSouth" src="https://services.swpc.noaa.gov/images/aurora-forecast-southern-hemisphere.jpg" alt="Aurora South">
-                    </div>
-                </div>
-                <p class="info-text">Green/yellow indicates aurora visibility. Updates every 5 minutes.</p>
-                <button class="refresh-btn" onclick="refreshAurora()">↻ Refresh Aurora</button>
-            </div>
-
-            <!-- Planetary K-index -->
-            <div class="card">
-                <h2>🌍 Planetary K-index (3 Day)</h2>
-                <div class="chart-container" id="kindexChart"></div>
-                <div class="legend">
-                    <h4>K-index Scale:</h4>
-                    <strong>Kp 0-2:</strong> Quiet • 
-                    <strong>Kp 3-4:</strong> Unsettled • 
-                    <strong>Kp 5:</strong> Minor Storm (G1) • 
-                    <strong>Kp 6:</strong> Moderate Storm (G2) • 
-                    <strong>Kp 7-9:</strong> Strong to Extreme Storm (G3-G5)
-                </div>
-                <button class="refresh-btn" onclick="loadKindexData()">↻ Refresh K-index</button>
-            </div>
-
-            <!-- Solar Cycle Progression -->
-            <div class="card card-full">
-                <h2>☀️ Solar Cycle 25 Progression</h2>
-                <div class="chart-container" id="solarCycleChart" style="height: 400px;"></div>
-                <p class="info-text">Current solar cycle showing sunspot numbers. Solar maximum expected around 2024-2025.</p>
-                <button class="refresh-btn" onclick="loadSolarCycleData()">↻ Refresh Solar Cycle</button>
-            </div>
-
-            <!-- WSA-ENLIL Solar Wind -->
-            <div class="card">
-                <h2>🌊 WSA-ENLIL Solar Wind Prediction</h2>
-                <div class="image-container">
-                    <img id="enlil" src="https://services.swpc.noaa.gov/images/animations/enlil/latest.jpg" alt="ENLIL Model">
-                </div>
-                <p class="info-text">3D model of solar wind and CME propagation. Shows density and speed of solar wind.</p>
-                <button class="refresh-btn" onclick="refreshEnlil()">↻ Refresh ENLIL</button>
-            </div>
-
-            <!-- Dst Index -->
-            <div class="card">
-                <h2>📊 Dst Index (Current Month)</h2>
-                <div class="image-container">
-                    <img id="dst" src="https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/presentmonth/index.png" alt="Dst Index">
-                </div>
-                <div class="legend">
-                    <h4>Dst Index Interpretation:</h4>
-                    <strong>Dst &gt; -30 nT:</strong> Quiet to Unsettled • 
-                    <strong>-30 to -50 nT:</strong> Minor Storm • 
-                    <strong>-50 to -100 nT:</strong> Moderate Storm • 
-                    <strong>&lt; -100 nT:</strong> Intense Storm
-                </div>
-                <p class="info-text">Disturbance Storm Time index measures geomagnetic storm intensity. Lower values indicate stronger storms.</p>
-                <button class="refresh-btn" onclick="refreshDst()">↻ Refresh Dst</button>
-            </div>
+    <div class="dashboard">
+        <!-- Solar Cycle Progression -->
+        <div class="card">
+            <h2>Solar Cycle Progression</h2>
+            <img src="https://services.swpc.noaa.gov/images/solar-cycle-sunspot-number.gif"
+                 alt="Solar Cycle Progression - Sunspot Number"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="loading" style="display:none;">Image temporarily unavailable</div>
+            <p>Current Solar Cycle 25 progression showing sunspot numbers and predictions with uncertainty ranges.</p>
+            <p><a href="https://www.swpc.noaa.gov/products/solar-cycle-progression" target="_blank">View Full Data →</a></p>
         </div>
 
-        <footer>
-            <p><strong>Data Sources:</strong> 
-                <a href="https://www.swpc.noaa.gov" target="_blank">NOAA Space Weather Prediction Center</a> • 
-                <a href="https://wdc.kugi.kyoto-u.ac.jp" target="_blank">Kyoto University WDC</a>
-            </p>
-            <p style="margin-top: 10px;">This dashboard updates automatically. Images refresh based on source update frequencies.</p>
-        </footer>
+        <!-- Aurora Forecast - Northern Hemisphere -->
+        <div class="card">
+            <h2>Aurora Forecast - Northern Hemisphere</h2>
+            <img src="https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg"
+                 alt="Aurora Forecast Northern Hemisphere"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="loading" style="display:none;">Image temporarily unavailable</div>
+            <p>30-90 minute forecast of aurora location and intensity for the Northern Hemisphere based on the OVATION model.</p>
+            <p><a href="https://www.swpc.noaa.gov/products/aurora-30-minute-forecast" target="_blank">View Full Forecast →</a></p>
+        </div>
+
+        <!-- Planetary K-Index -->
+        <div class="card">
+            <h2>Planetary K-Index</h2>
+            <img src="https://services.swpc.noaa.gov/images/planetary-k-index.gif"
+                 alt="Planetary K-Index"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="loading" style="display:none;">Image temporarily unavailable</div>
+            <p>Geomagnetic activity indicator (0-9 scale). Values of 5 or higher indicate geomagnetic storm conditions.</p>
+            <p><a href="https://www.swpc.noaa.gov/products/planetary-k-index" target="_blank">View Full Data →</a></p>
+        </div>
+
+        <!-- GOES X-Ray Flux -->
+        <div class="card">
+            <h2>GOES X-Ray Flux</h2>
+            <img src="https://services.swpc.noaa.gov/images/goes-xray-flux-6-hour.gif"
+                 alt="GOES X-Ray Flux"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="loading" style="display:none;">Image temporarily unavailable</div>
+            <p>Solar flare activity measured in X-ray wavelengths. Higher levels indicate stronger solar flares that can affect communications.</p>
+            <p><a href="https://www.swpc.noaa.gov/products/goes-x-ray-flux" target="_blank">View Full Data →</a></p>
+        </div>
+
+        <!-- WSA-ENLIL Solar Wind Prediction -->
+        <div class="card">
+            <h2>WSA-ENLIL Solar Wind Prediction</h2>
+            <img src="https://services.swpc.noaa.gov/images/animations/enlil/latest.jpg"
+                 alt="WSA-ENLIL Solar Wind Prediction"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="loading" style="display:none;">Image temporarily unavailable</div>
+            <p>Physics-based model predicting solar wind structures and coronal mass ejections (CMEs) 1-4 days in advance.</p>
+            <p><a href="https://www.swpc.noaa.gov/products/wsa-enlil-solar-wind-prediction" target="_blank">View Full Prediction →</a></p>
+        </div>
+
+        <!-- Dst Index -->
+        <div class="card">
+            <h2>Dst Index (Real-time)</h2>
+            <img src="https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/presentmonth/index.png"
+                 alt="Dst Index Current Month"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="loading" style="display:none;">Image temporarily unavailable</div>
+            <p>Disturbance Storm Time index measuring geomagnetic storm intensity. Values below -50 nT indicate storm conditions.</p>
+            <p><a href="https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/presentmonth/" target="_blank">View Full Data →</a></p>
+        </div>
+    </div>
+
+    <div class="refresh-info">
+        <div class="last-updated">
+            <strong>Last Updated:</strong> <span id="timestamp"></span>
+        </div>
+        <p style="margin-top: 15px;">Images refresh automatically from NOAA SWPC and Kyoto University sources</p>
+        <p>Data sources: NOAA Space Weather Prediction Center & World Data Center for Geomagnetism, Kyoto</p>
     </div>
 
     <script>
-        // Auto-refresh intervals
-        let xrayInterval;
-        let imageInterval;
-
-        // Load GOES X-ray Flux data
-        async function loadXrayData() {
-            const refreshBtn = document.querySelector('.card-full .refresh-btn');
-            refreshBtn.disabled = true;
-            refreshBtn.innerHTML = '<span class="spinning">↻</span> Loading...';
-
-            try {
-                const response = await fetch('https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json');
-                const jsonData = await response.json();
-
-                const shortWave = [];
-                const longWave = [];
-
-                jsonData.forEach(d => {
-                    if (d.flux !== -999 && d.flux > 0) {
-                        const time = new Date(d.time_tag);
-                        const flux = parseFloat(d.flux);
-                        
-                        if (d.energy === '0.05-0.4nm') {
-                            shortWave.push({ x: time, y: flux });
-                        } else if (d.energy === '0.1-0.8nm') {
-                            longWave.push({ x: time, y: flux });
-                        }
-                    }
-                });
-
-                shortWave.sort((a, b) => a.x - b.x);
-                longWave.sort((a, b) => a.x - b.x);
-
-                plotXrayData(shortWave, longWave);
-                updateTimestamp();
-
-            } catch (error) {
-                console.error('Error loading X-ray data:', error);
-            }
-
-            refreshBtn.disabled = false;
-            refreshBtn.innerHTML = '↻ Refresh X-ray Data';
-        }
-
-        function plotXrayData(shortWave, longWave) {
-            const trace1 = {
-                x: shortWave.map(d => d.x),
-                y: shortWave.map(d => d.y),
-                type: 'scatter',
-                mode: 'lines',
-                name: '0.05-0.4 nm',
-                line: { color: '#dc2626', width: 2 }
-            };
-
-            const trace2 = {
-                x: longWave.map(d => d.x),
-                y: longWave.map(d => d.y),
-                type: 'scatter',
-                mode: 'lines',
-                name: '0.1-0.8 nm',
-                line: { color: '#2563eb', width: 2 }
-            };
-
-            const layout = {
-                xaxis: {
-                    title: 'Time (UTC)',
-                    showgrid: true,
-                    gridcolor: '#e5e7eb'
-                },
-                yaxis: {
-                    title: 'Watts / m²',
-                    type: 'log',
-                    range: [-9, -2],
-                    showgrid: true,
-                    gridcolor: '#e5e7eb',
-                    exponentformat: 'e'
-                },
-                hovermode: 'closest',
-                shapes: [
-                    { type: 'line', x0: shortWave[0]?.x, x1: shortWave[shortWave.length - 1]?.x, y0: 1e-4, y1: 1e-4, line: { color: '#dc2626', width: 1.5, dash: 'dash' } },
-                    { type: 'line', x0: shortWave[0]?.x, x1: shortWave[shortWave.length - 1]?.x, y0: 1e-5, y1: 1e-5, line: { color: '#ea580c', width: 1.5, dash: 'dash' } },
-                    { type: 'line', x0: shortWave[0]?.x, x1: shortWave[shortWave.length - 1]?.x, y0: 1e-6, y1: 1e-6, line: { color: '#eab308', width: 1.5, dash: 'dash' } },
-                    { type: 'line', x0: shortWave[0]?.x, x1: shortWave[shortWave.length - 1]?.x, y0: 1e-7, y1: 1e-7, line: { color: '#16a34a', width: 1.5, dash: 'dash' } },
-                    { type: 'line', x0: shortWave[0]?.x, x1: shortWave[shortWave.length - 1]?.x, y0: 1e-8, y1: 1e-8, line: { color: '#2563eb', width: 1.5, dash: 'dash' } }
-                ],
-                annotations: [
-                    { x: 0.98, y: Math.log10(1e-4), xref: 'paper', yref: 'y', text: 'X', showarrow: false, font: { size: 12, color: '#dc2626' } },
-                    { x: 0.98, y: Math.log10(1e-5), xref: 'paper', yref: 'y', text: 'M', showarrow: false, font: { size: 12, color: '#ea580c' } },
-                    { x: 0.98, y: Math.log10(1e-6), xref: 'paper', yref: 'y', text: 'C', showarrow: false, font: { size: 12, color: '#eab308' } },
-                    { x: 0.98, y: Math.log10(1e-7), xref: 'paper', yref: 'y', text: 'B', showarrow: false, font: { size: 12, color: '#16a34a' } },
-                    { x: 0.98, y: Math.log10(1e-8), xref: 'paper', yref: 'y', text: 'A', showarrow: false, font: { size: 12, color: '#2563eb' } }
-                ],
-                margin: { l: 60, r: 40, t: 30, b: 50 },
-                plot_bgcolor: '#ffffff',
-                paper_bgcolor: '#ffffff'
-            };
-
-            const config = {
-                responsive: true,
-                displayModeBar: true,
-                displaylogo: false,
-                modeBarButtonsToRemove: ['lasso2d', 'select2d']
-            };
-
-            Plotly.newPlot('xrayChart', [trace1, trace2], layout, config);
-        }
-
-        // Refresh functions for images
-        function refreshAurora() {
-            const north = document.getElementById('auroraNorth');
-            const south = document.getElementById('auroraSouth');
-            const timestamp = new Date().getTime();
-            north.src = `https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg?t=${timestamp}`;
-            south.src = `https://services.swpc.noaa.gov/images/aurora-forecast-southern-hemisphere.jpg?t=${timestamp}`;
-            updateTimestamp();
-        }
-
-        function refreshKindex() {
-            const img = document.getElementById('kindex');
-            img.src = `https://services.swpc.noaa.gov/images/planetary-k-index.gif?t=${new Date().getTime()}`;
-            updateTimestamp();
-        }
-
-        function refreshSolarCycle() {
-            const img = document.getElementById('solarCycle');
-            img.src = `https://services.swpc.noaa.gov/images/solar-cycle-sunspot-number.gif?t=${new Date().getTime()}`;
-            updateTimestamp();
-        }
-
-        function refreshEnlil() {
-            const img = document.getElementById('enlil');
-            img.src = `https://services.swpc.noaa.gov/images/animations/enlil/latest.jpg?t=${new Date().getTime()}`;
-            updateTimestamp();
-        }
-
-        function refreshDst() {
-            const img = document.getElementById('dst');
-            img.src = `https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/presentmonth/index.png?t=${new Date().getTime()}`;
-            updateTimestamp();
-        }
-
+        // Update timestamp
         function updateTimestamp() {
             const now = new Date();
-            document.getElementById('lastUpdate').textContent = 
-                `Last updated: ${now.toLocaleString()} (Your Local Time)`;
+            document.getElementById('timestamp').textContent = now.toLocaleString();
         }
 
-        // Initial load
-        loadXrayData();
-        loadKindexData();
-        loadSolarCycleData();
         updateTimestamp();
 
-        // Auto-refresh: X-ray data every 2 minutes, images every 5 minutes
-        xrayInterval = setInterval(loadXrayData, 120000);
-        imageInterval = setInterval(() => {
-            refreshAurora();
-            loadKindexData();
-        }, 300000);
+        // Auto-refresh images every 5 minutes
+        setInterval(() => {
+            const images = document.querySelectorAll('.card img');
+            images.forEach(img => {
+                const src = img.src.split('?')[0];
+                img.src = src + '?t=' + new Date().getTime();
+            });
+            updateTimestamp();
+        }, 300000); // 5 minutes
+
+        // Reload page every hour to ensure fresh data
+        setTimeout(() => {
+            location.reload();
+        }, 3600000); // 1 hour
     </script>
 </body>
 </html>
