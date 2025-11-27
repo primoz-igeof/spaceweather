@@ -1,4 +1,109 @@
-<!DOCTYPE html>
+// Load K-index data
+        async function loadKindexData() {
+            try {
+                const response = await fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json');
+                const jsonData = await response.json();
+
+                const times = [];
+                const kpValues = [];
+                const colors = [];
+
+                jsonData.slice(1).forEach(d => {
+                    const time = new Date(d[0]);
+                    const kp = parseFloat(d[1]);
+                    
+                    times.push(time);
+                    kpValues.push(kp);
+                    
+                    // Color based on severity
+                    if (kp >= 5) colors.push('#dc2626'); // Red for storm
+                    else if (kp >= 4) colors.push('#f59e0b'); // Orange for unsettled
+                    else colors.push('#16a34a'); // Green for quiet
+                });
+
+                const trace = {
+                    x: times,
+                    y: kpValues,
+                    type: 'bar',
+                    marker: { color: colors },
+                    name: 'Kp Index'
+                };
+
+                const layout = {
+                    xaxis: { title: 'Time (UTC)' },
+                    yaxis: { 
+                        title: 'Kp Index', 
+                        range: [0, 9],
+                        dtick: 1
+                    },
+                    shapes: [
+                        { type: 'line', x0: times[0], x1: times[times.length-1], y0: 5, y1: 5, 
+                          line: { color: '#dc2626', width: 2, dash: 'dash' } }
+                    ],
+                    annotations: [
+                        { x: 0.95, y: 5, xref: 'paper', yref: 'y', text: 'Storm Threshold (G1)', 
+                          showarrow: false, font: { size: 11, color: '#dc2626' } }
+                    ],
+                    margin: { l: 60, r: 40, t: 30, b: 50 }
+                };
+
+                Plotly.newPlot('kindexChart', [trace], layout, { responsive: true, displaylogo: false });
+                updateTimestamp();
+            } catch (error) {
+                console.error('Error loading K-index data:', error);
+            }
+        }
+
+        // Load Solar Cycle data
+        async function loadSolarCycleData() {
+            try {
+                const response = await fetch('https://services.swpc.noaa.gov/json/solar-cycle/observed-solar-cycle-indices.json');
+                const jsonData = await response.json();
+
+                const times = [];
+                const ssnValues = [];
+                const smoothedValues = [];
+
+                jsonData.forEach(d => {
+                    const time = new Date(d['time-tag'] + '-01');
+                    times.push(time);
+                    ssnValues.push(d.ssn);
+                    smoothedValues.push(d.smoothed_ssn);
+                });
+
+                const trace1 = {
+                    x: times,
+                    y: ssnValues,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Monthly Sunspot Number',
+                    line: { color: '#94a3b8', width: 1 },
+                    opacity: 0.5
+                };
+
+                const trace2 = {
+                    x: times,
+                    y: smoothedValues,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Smoothed Sunspot Number',
+                    line: { color: '#3b82f6', width: 3 }
+                };
+
+                const layout = {
+                    xaxis: { title: 'Date' },
+                    yaxis: { title: 'Sunspot Number' },
+                    hovermode: 'closest',
+                    margin: { l: 60, r: 40, t: 30, b: 50 },
+                    legend: { x: 0.02, y: 0.98 }
+                };
+
+                Plotly.newPlot('solarCycleChart', [trace1, trace2], layout, { responsive: true, displaylogo: false });
+                updateTimestamp();
+            } catch (error) {
+                console.error('Error loading Solar Cycle data:', error);
+            }
+        }<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -235,28 +340,24 @@
             <!-- Planetary K-index -->
             <div class="card">
                 <h2>🌍 Planetary K-index (3 Day)</h2>
-                <div class="image-container">
-                    <img id="kindex" src="https://services.swpc.noaa.gov/images/planetary-k-index.gif" alt="K-index">
-                </div>
+                <div class="chart-container" id="kindexChart"></div>
                 <div class="legend">
                     <h4>K-index Scale:</h4>
                     <strong>Kp 0-2:</strong> Quiet • 
                     <strong>Kp 3-4:</strong> Unsettled • 
-                    <strong>Kp 5:</strong> Minor Storm • 
-                    <strong>Kp 6:</strong> Moderate Storm • 
-                    <strong>Kp 7-9:</strong> Strong to Extreme Storm
+                    <strong>Kp 5:</strong> Minor Storm (G1) • 
+                    <strong>Kp 6:</strong> Moderate Storm (G2) • 
+                    <strong>Kp 7-9:</strong> Strong to Extreme Storm (G3-G5)
                 </div>
-                <button class="refresh-btn" onclick="refreshKindex()">↻ Refresh K-index</button>
+                <button class="refresh-btn" onclick="loadKindexData()">↻ Refresh K-index</button>
             </div>
 
             <!-- Solar Cycle Progression -->
             <div class="card card-full">
                 <h2>☀️ Solar Cycle 25 Progression</h2>
-                <div class="image-container">
-                    <img id="solarCycle" src="https://services.swpc.noaa.gov/images/solar-cycle-sunspot-number.gif" alt="Solar Cycle">
-                </div>
+                <div class="chart-container" id="solarCycleChart" style="height: 400px;"></div>
                 <p class="info-text">Current solar cycle showing sunspot numbers. Solar maximum expected around 2024-2025.</p>
-                <button class="refresh-btn" onclick="refreshSolarCycle()">↻ Refresh Solar Cycle</button>
+                <button class="refresh-btn" onclick="loadSolarCycleData()">↻ Refresh Solar Cycle</button>
             </div>
 
             <!-- WSA-ENLIL Solar Wind -->
@@ -446,13 +547,15 @@
 
         // Initial load
         loadXrayData();
+        loadKindexData();
+        loadSolarCycleData();
         updateTimestamp();
 
         // Auto-refresh: X-ray data every 2 minutes, images every 5 minutes
         xrayInterval = setInterval(loadXrayData, 120000);
         imageInterval = setInterval(() => {
             refreshAurora();
-            refreshKindex();
+            loadKindexData();
         }, 300000);
     </script>
 </body>
